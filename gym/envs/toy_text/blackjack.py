@@ -13,15 +13,26 @@ def cmp(a, b):
 
 
 # 1 = Ace, 2-10 = Number cards, Jack/Queen/King = 10
-deck = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10]
+deck = []
+played_value_state = [0] * 10
+played_value_state = 0
+
+def shuffle():
+    global played_cards_counter
+    played_cards_counter = 0
+
+    global played_value_state
+    played_value_state = [0] * 10
+
+    global deck
+    deck = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10] * 6
+
+def draw_card():
+    return deck.pop()
 
 
-def draw_card(np_random):
-    return int(np_random.choice(deck))
-
-
-def draw_hand(np_random):
-    return [draw_card(np_random), draw_card(np_random)]
+def draw_hand():
+    return [draw_card(), draw_card()]
 
 
 def usable_ace(hand):  # Does this hand have a usable ace?
@@ -130,10 +141,16 @@ class BlackjackEnv(gym.Env):
 
         self.render_mode = render_mode
 
+        # Shuffle to start
+        shuffle()
+
     def step(self, action):
         assert self.action_space.contains(action)
         if action:  # hit: add a card to players hand and return
-            self.player.append(draw_card(self.np_random))
+            self.player.append(draw_card())
+            # Add card to count
+            played_value_state[self.player[-1] - 1] += 1
+
             if is_bust(self.player):
                 terminated = True
                 reward = -1.0
