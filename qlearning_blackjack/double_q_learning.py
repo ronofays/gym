@@ -40,13 +40,14 @@ def evaluate(enviroment, q_tables, count_cards=False):
 
     return wins / 100
 
-def q_learning(enviroment, num_of_episodes=1000, count_cards=False):
+def q_learning(enviroment, num_of_episodes=1000, count_cards=False, verbose=False):
     # Initialize Q-table
     if count_cards:
-        q_table = np.zeros([32,11,2,11,5,2])
+        q_table = np.zeros([32,11,2,11,6,2])
     else:
         q_table = np.zeros([32,11,2,2])
     rewards = np.zeros(num_of_episodes)
+    cumulative_wr = np.zeros(num_of_episodes)
     win_rate = np.zeros(num_of_episodes // 100)
 
     wins = 0
@@ -100,28 +101,34 @@ def q_learning(enviroment, num_of_episodes=1000, count_cards=False):
 
         if reward > 0:
             wins += 1
+
+        cumulative_wr[episode] = wins / (episode + 1)
         
         if episode % 100 == 0:
             wr = evaluate(enviroment, [q_table])
-            print("Episode: ", episode)
-            print("Win rate: ", evaluate(enviroment, [q_table]))
-            print("")
+            if verbose:
+                print("Episode: ", episode)
+                print("Win rate: ", evaluate(enviroment, [q_table]))
+                print("")
             win_rate[episode // 100] = wr
 
 
-    return rewards, win_rate, q_table
+    return rewards, cumulative_wr, win_rate, q_table
 
 
-def double_q_learning(enviroment, num_of_episodes=1000, count_cards=False):
+def double_q_learning(enviroment, num_of_episodes=1000, count_cards=False, verbose=False):
     if count_cards:
-        q_a_table = np.zeros([32,11,2,11,5,2])
-        q_b_table = np.zeros([32,11,2,11,5,2])
+        q_a_table = np.zeros([32,11,2,11,6,2])
+        q_b_table = np.zeros([32,11,2,11,6,2])
     else:
         q_a_table = np.zeros([32,11,2,2])
         q_b_table = np.zeros([32,11,2,2])
 
     rewards = np.zeros(num_of_episodes)
+    cumulative_wr = np.zeros(num_of_episodes)
     win_rate = np.zeros(num_of_episodes // 100)
+
+    wins = 0
     for episode in range(0, num_of_episodes):
         # Reset the enviroment
         state,info = enviroment.reset()
@@ -174,12 +181,19 @@ def double_q_learning(enviroment, num_of_episodes=1000, count_cards=False):
         
         if episode % 100 == 0:
             wr = evaluate(enviroment, [q_a_table, q_b_table])
-            print("Episode: ", episode)
-            print("Win rate: ", evaluate(enviroment, [q_a_table, q_b_table]))
-            print("")
+            if verbose:
+                print("Episode: ", episode)
+                print("Win rate: ", evaluate(enviroment, [q_a_table, q_b_table]))
+                print("")
             win_rate[episode // 100] = wr
-                
-    return rewards, win_rate, q_a_table, q_b_table
+        
+        if reward > 0:
+            wins += 1
+        
+        cumulative_wr[episode] = wins / (episode + 1)
+
+
+    return rewards, cumulative_wr, win_rate, q_a_table, q_b_table
 
 if __name__ == "__main__":
     env = gym.make("Blackjack-v1")

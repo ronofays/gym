@@ -40,7 +40,7 @@ def is_natural(hand):  # Is this hand a natural blackjack?
     return sorted(hand) == [1, 10]
 
 def convert_card_count_state(card_count):
-    card_counting = 5+ (card_count // 2)
+    card_counting = 5 + (card_count // 2)
 
     if card_counting < 0:
         card_counting = 0
@@ -50,7 +50,8 @@ def convert_card_count_state(card_count):
     return card_counting
 
 def deck_size_state(deck):
-    return ((len(deck) - 1) // (6 * 52)) - 1
+    # Return the number of decks left in the shoe from 0 to 5
+    return len(deck) // 52
 
 
 class BlackjackEnv(gym.Env):
@@ -126,7 +127,7 @@ class BlackjackEnv(gym.Env):
     def __init__(self, render_mode: Optional[str] = None, natural=False, sab=False):
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Tuple(
-            (spaces.Discrete(32), spaces.Discrete(11), spaces.Discrete(2), spaces.Discrete(11), spaces.Discrete(5))
+            (spaces.Discrete(32), spaces.Discrete(11), spaces.Discrete(2), spaces.Discrete(11), spaces.Discrete(6))
         )
 
         # Flag to payout 1.5 on a "natural" blackjack win, like casino rules
@@ -151,7 +152,7 @@ class BlackjackEnv(gym.Env):
         np.random.shuffle(self.deck)
 
     def update_card_counting_state(self, card):
-        if card < 5:
+        if card <= 5:
             self.card_counting_state -= 1
         elif card > 6:
             self.card_counting_state += 1
