@@ -17,27 +17,11 @@ deck = []
 played_value_state = [0] * 10
 played_value_state = 0
 
-def shuffle():
-    global played_cards_counter
-    played_cards_counter = 0
-
-    global played_value_state
-    played_value_state = [0] * 10
-
-    global deck
-    deck = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10] * 6
-
-def draw_card():
-    return deck.pop()
-
-
-def draw_hand():
-    return [draw_card(), draw_card()]
-
 
 def usable_ace(hand):  # Does this hand have a usable ace?
-    return 1 in hand and sum(hand) + 10 <= 21
-
+    if 1 in hand and sum(hand) + 10 <= 21:
+        return 1
+    return 0
 
 def sum_hand(hand):  # Return current hand total
     if usable_ace(hand):
@@ -52,9 +36,21 @@ def is_bust(hand):  # Is this hand a bust?
 def score(hand):  # What is the score of this hand (0 if bust)
     return 0 if is_bust(hand) else sum_hand(hand)
 
-
 def is_natural(hand):  # Is this hand a natural blackjack?
     return sorted(hand) == [1, 10]
+
+def convert_card_count_state(card_count):
+    card_counting = 5+ (card_count // 2)
+
+    if card_counting < 0:
+        card_counting = 0
+    elif card_counting > 10:
+        card_counting = 10    
+
+    return card_counting
+
+def deck_size_state(deck):
+    return ((len(deck) - 1) // (6 * 52)) - 1
 
 
 class BlackjackEnv(gym.Env):
@@ -86,7 +82,8 @@ class BlackjackEnv(gym.Env):
     ### Observation Space
     The observation consists of a 3-tuple containing: the player's current sum,
     the value of the dealer's one showing card (1-10 where 1 is ace),
-    and whether the player holds a usable ace (0 or 1).
+    and whether the player holds a usable ace (0 or 1). Added to this is the
+    current count of the card values that have been played since the last shuffle.
 
     This environment corresponds to the version of the blackjack problem
     described in Example 5.1 in Reinforcement Learning: An Introduction
@@ -129,7 +126,7 @@ class BlackjackEnv(gym.Env):
     def __init__(self, render_mode: Optional[str] = None, natural=False, sab=False):
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Tuple(
-            (spaces.Discrete(32), spaces.Discrete(11), spaces.Discrete(2))
+            (spaces.Discrete(32), spaces.Discrete(11), spaces.Discrete(2), spaces.Discrete(11), spaces.Discrete(5))
         )
 
         # Flag to payout 1.5 on a "natural" blackjack win, like casino rules
@@ -142,25 +139,52 @@ class BlackjackEnv(gym.Env):
         self.render_mode = render_mode
 
         # Shuffle to start
-        shuffle()
+        self.shuffle()
+    
+    def shuffle(self):  
+        self.card_counting_state = 0
+
+        self.deck = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10]
+        self.deck = self.deck * 4
+        self.deck = self.deck * 6
+        # print("Deck size: ", len(self.deck))
+        np.random.shuffle(self.deck)
+
+    def update_card_counting_state(self, card):
+        if card < 5:
+            self.card_counting_state -= 1
+        elif card > 6:
+            self.card_counting_state += 1
+
+        
+    def draw_card(self):
+        return self.deck.pop()
+    
+    def draw_hand(self):
+        return [self.draw_card(), self.draw_card()]
 
     def step(self, action):
         assert self.action_space.contains(action)
         if action:  # hit: add a card to players hand and return
-            self.player.append(draw_card())
-            # Add card to count
-            played_value_state[self.player[-1] - 1] += 1
+            self.player.append(self.draw_card())
+            self.update_card_counting_state(self.player[-1])
 
             if is_bust(self.player):
                 terminated = True
-                reward = -1.0
+                reward = -5.0
             else:
                 terminated = False
                 reward = 0.0
         else:  # stick: play out the dealers hand, and score
             terminated = True
+
+            # Second card of dealer is now revealed
+            self.update_card_counting_state(self.dealer[1])
+
             while sum_hand(self.dealer) < 17:
-                self.dealer.append(draw_card(self.np_random))
+                self.dealer.append(self.draw_card())
+                self.update_card_counting_state(self.dealer[-1])
+
             reward = cmp(score(self.player), score(self.dealer))
             if self.sab and is_natural(self.player) and not is_natural(self.dealer):
                 # Player automatically wins. Rules consistent with S&B
@@ -176,21 +200,30 @@ class BlackjackEnv(gym.Env):
 
         if self.render_mode == "human":
             self.render()
+
         return self._get_obs(), reward, terminated, False, {}
 
     def _get_obs(self):
-        return (sum_hand(self.player), self.dealer[0], usable_ace(self.player))
-
+        return (sum_hand(self.player), self.dealer[0], usable_ace(self.player),
+                convert_card_count_state(self.card_counting_state), deck_size_state(self.deck))
     def reset(
         self,
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
         super().reset(seed=seed)
-        self.dealer = draw_hand(self.np_random)
-        self.player = draw_hand(self.np_random)
 
-        _, dealer_card_value, _ = self._get_obs()
+        # Shuffle after 5 of 6 decks played
+        if len(self.deck) < 52:
+            self.shuffle()
+
+        self.dealer = self.draw_hand()
+        self.update_card_counting_state(self.dealer[0])
+
+        self.player = self.draw_hand()
+        self.update_card_counting_state(self.player[0])
+
+        _, dealer_card_value, _, _, _ = self._get_obs()
 
         suits = ["C", "D", "H", "S"]
         self.dealer_top_card_suit = self.np_random.choice(suits)
