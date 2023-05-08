@@ -10,16 +10,52 @@ ALPHA = 0.1
 GAMMA = 0.9
 EPSILON = 0.05
 
-def q_learning(enviroment, num_of_episodes=1000):
+def evaluate(enviroment, q_tables, count_cards=False):
+    wins = 0
+    for episode in range(0, 100):
+        # Reset the enviroment
+        state,info = enviroment.reset()
+        if not count_cards:
+            state = (state[0], state[1], state[2])        
+
+        # Initialize variables
+        terminated = False
+
+        reward = 0
+        while not terminated:
+            # Pick action a....
+            q_table = np.sum([t[state] for t in q_tables])
+            max_q = np.where(q_table == np.max(q_table))[0]
+            action = np.random.choice(max_q)
+
+            # ...and get r and s'
+            next_state, reward, terminated, _,_ = enviroment.step(action)
+
+            state = next_state
+            if not count_cards:
+                state = (state[0], state[1], state[2])
+
+        if reward > 0:
+            wins += 1
+
+    return wins / 100
+
+def q_learning(enviroment, num_of_episodes=1000, count_cards=False):
     # Initialize Q-table
-    q_table = np.zeros([32,11,2,11,5,2])
+    if count_cards:
+        q_table = np.zeros([32,11,2,11,5,2])
+    else:
+        q_table = np.zeros([32,11,2,2])
     rewards = np.zeros(num_of_episodes)
-    win_rate = np.zeros(num_of_episodes)
+    win_rate = np.zeros(num_of_episodes // 100)
 
     wins = 0
     for episode in range(0, num_of_episodes):
         # Reset the enviroment
         state,info = enviroment.reset()
+
+        if not count_cards:
+            state = (state[0], state[1], state[2])
 
         # Initialize variables
         terminated = False
@@ -47,6 +83,8 @@ def q_learning(enviroment, num_of_episodes=1000):
             # print(reward)
 
             state = next_state
+            if not count_cards:
+                state = (state[0], state[1], state[2])
 
         states.append(state)
            
@@ -62,22 +100,34 @@ def q_learning(enviroment, num_of_episodes=1000):
 
         if reward > 0:
             wins += 1
+        
+        if episode % 100 == 0:
+            wr = evaluate(enviroment, [q_table])
+            print("Episode: ", episode)
+            print("Win rate: ", evaluate(enviroment, [q_table]))
+            print("")
+            win_rate[episode // 100] = wr
 
-        win_rate[episode] = wins / (episode + 1)
 
     return rewards, win_rate, q_table
 
 
-def double_q_learning(enviroment, num_of_episodes=1000):
-    q_a_table = np.zeros([32,11,2,11,5,2])
-    q_b_table = np.zeros([32,11,2,11,5,2])
-    
+def double_q_learning(enviroment, num_of_episodes=1000, count_cards=False):
+    if count_cards:
+        q_a_table = np.zeros([32,11,2,11,5,2])
+        q_b_table = np.zeros([32,11,2,11,5,2])
+    else:
+        q_a_table = np.zeros([32,11,2,2])
+        q_b_table = np.zeros([32,11,2,2])
+
     rewards = np.zeros(num_of_episodes)
-    win_rate = np.zeros(num_of_episodes)
-    wins = 0
+    win_rate = np.zeros(num_of_episodes // 100)
     for episode in range(0, num_of_episodes):
         # Reset the enviroment
         state,info = enviroment.reset()
+
+        if not count_cards:
+            state = (state[0], state[1], state[2])
 
         # Initialize variables
         terminated = False
@@ -102,6 +152,8 @@ def double_q_learning(enviroment, num_of_episodes=1000):
             next_state, reward, terminated, _,_ = enviroment.step(action)
 
             state = next_state
+            if not count_cards:
+                state = (state[0], state[1], state[2])
 
         states.append(state)
 
@@ -120,11 +172,13 @@ def double_q_learning(enviroment, num_of_episodes=1000):
 
         rewards[episode] += reward
         
-        if reward > 0:
-            wins += 1
-        
-        win_rate[episode] = wins / (episode + 1)
-
+        if episode % 100 == 0:
+            wr = evaluate(enviroment, [q_a_table, q_b_table])
+            print("Episode: ", episode)
+            print("Win rate: ", evaluate(enviroment, [q_a_table, q_b_table]))
+            print("")
+            win_rate[episode // 100] = wr
+                
     return rewards, win_rate, q_a_table, q_b_table
 
 if __name__ == "__main__":
